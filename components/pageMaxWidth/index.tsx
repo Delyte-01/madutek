@@ -1,11 +1,27 @@
-import React from 'react'
+import React from "react";
 
-const PageMaxWidth = () => {
-  return (
-    <div>
-      
-    </div>
-  )
+interface PageContainerProps {
+  children: React.ReactNode;
+  className?: string;
 }
 
-export default PageMaxWidth
+const PageMaxWidth = ({ children, className = "" }: PageContainerProps) => {
+  return (
+    <div
+      className={`
+        relative 
+        mx-auto 
+        w-full 
+        max-w-500    
+        px-6               
+        md:px-12           
+        lg:px-20          
+        ${className}
+      `}
+    >
+      {children}
+    </div>
+  );
+};
+
+export default PageMaxWidth;
