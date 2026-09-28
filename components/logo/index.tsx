@@ -13,7 +13,7 @@ const Logo = () => {
         {/* Main gradients */}
         <linearGradient id="mGradient" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="#3B82F6" />
-          <stop offset="50%" stopColor="#7C3AED" />
+          <stop offset="50%" stopColor="#EA580C" />
           <stop offset="100%" stopColor="#F59E0B" />
         </linearGradient>
 
@@ -67,7 +67,8 @@ const Logo = () => {
         fontFamily="Poppins, Arial"
         fontSize="34"
         fontWeight="700"
-        fill="#F8FAFC"
+        fill="currentColor"
+        className="text-foreground"
       >
         Madu<tspan fill="#F59E0B">Tek</tspan>
       </text>
@@ -77,7 +78,8 @@ const Logo = () => {
         y="95"
         fontFamily="Poppins, Arial"
         fontSize="14"
-        fill="#94A3B8"
+        fill="currentColor"
+        className="text-muted-foreground"
       >
         Tech Solutions Redefined
       </text>

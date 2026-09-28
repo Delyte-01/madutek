@@ -18,6 +18,7 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${clashGrotesk.variable} ${generalSans.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
         <SmoothScroll>

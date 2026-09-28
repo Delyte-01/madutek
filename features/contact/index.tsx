@@ -1,13 +1,26 @@
-"use client"
-import { useState, useRef, type FormEvent } from "react";
+"use client";
+
+import { useState, useRef, type ChangeEvent, type FormEvent } from "react";
+import Image from "next/image";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SplitText } from "gsap/SplitText";
 import { Send, Mail, MapPin, Phone, ArrowUpRight, Clock } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 gsap.registerPlugin(ScrollTrigger, SplitText);
 
+/* ---------- Types ---------- */
 type ServiceOption =
   | "custom"
   | "ecommerce"
@@ -16,7 +29,7 @@ type ServiceOption =
   | "other"
   | "";
 
-interface FormState {
+export interface ContactFormData {
   name: string;
   email: string;
   company: string;
@@ -24,33 +37,88 @@ interface FormState {
   details: string;
 }
 
+interface ContactProps {
+  /** Image shown to the right of the heading. Put a file in /public and pass its path. */
+  imageSrc?: string;
+  imageAlt?: string;
+  /** Called on submit. Throw to show the error state. Wire this to your API route / email service. */
+  onSubmit?: (data: ContactFormData) => Promise<void>;
+}
+
+/* ---------- Data ---------- */
 const TIMELINE_STEPS = [
-  { label: "Discovery & Quote", time: "1–2 days", index: "01" },
-  { label: "Design Phase", time: "1–2 weeks", index: "02" },
+  { label: "Discovery & quote", time: "1–2 days", index: "01" },
+  { label: "Design phase", time: "1–2 weeks", index: "02" },
   { label: "Development", time: "2–4 weeks", index: "03" },
   { label: "Launch", time: "1–2 days", index: "04" },
 ] as const;
 
 const CONTACT_ITEMS = [
-  { Icon: Mail, label: "Email", value: "hello@forgestudio.dev" },
-  { Icon: Phone, label: "Phone", value: "+1 (555) 234-5678" },
-  { Icon: MapPin, label: "Location", value: "Remote-first, worldwide" },
+  {
+    Icon: Mail,
+    label: "Email",
+    value: "sylvamaduneche@gmail.com",
+    href: "sylvamaduneche@gmail.com",
+  },
+  {
+    Icon: Phone,
+    label: "Phone",
+    value: "08103831224",
+    href: "tel:08103831224",
+  },
+  {
+    Icon: MapPin,
+    label: "Location",
+    value: "Remote-first, worldwide",
+    href: undefined,
+  },
 ] as const;
 
-export function Contact() {
+const SERVICES: { value: Exclude<ServiceOption, "">; label: string }[] = [
+  { value: "custom", label: "Custom website" },
+  { value: "ecommerce", label: "E-commerce store" },
+  { value: "webapp", label: "Web application" },
+  { value: "redesign", label: "Website redesign" },
+  { value: "other", label: "Something else" },
+];
+
+/* ---------- Shared classes ---------- */
+const bodyFont = "font-['Helvetica_Neue',Helvetica,Arial,sans-serif]";
+const gradientText =
+  "bg-gradient-to-r from-[#b08eff] to-[#6ee7f7] bg-clip-text text-transparent";
+const labelCls = `${bodyFont} mb-2 block text-[13px] font-medium text-[var(--muted-foreground)]`;
+
+const fieldCls = `${bodyFont} h-12 w-full rounded-xl border-[var(--border)] bg-[var(--secondary)] px-4 text-[15px] text-[var(--foreground)] shadow-none transition placeholder:text-[var(--muted-foreground)]/70 focus-visible:border-[#b08eff] focus-visible:bg-[#b08eff]/5 focus-visible:ring-4 focus-visible:ring-[#b08eff]/15`;
+
+const selectItemCls =
+  "cursor-pointer rounded-lg py-2.5 text-sm text-[var(--foreground)] focus:bg-[#b08eff]/10 focus:text-[var(--foreground)]";
+const cardCls =
+  "rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 backdrop-blur-md sm:p-7";
+const cardTitleCls = `${bodyFont} text-[13px] font-semibold text-[var(--foreground)]`;
+
+/* ---------- Component ---------- */
+export function Contact({
+  imageSrc = "https://images.pexels.com/photos/3184649/pexels-photo-3184649.jpeg",
+  imageAlt = "The MaduTek team at work",
+  onSubmit,
+}: ContactProps = {}) {
   const sectionRef = useRef<HTMLElement>(null);
-  const headingRef = useRef<HTMLHeadingElement>(null);
-  const eyebrowRef = useRef<HTMLSpanElement>(null);
+  const lineRef = useRef<HTMLSpanElement>(null);
+  const gradientWordRef = useRef<HTMLSpanElement>(null);
+  const markerRef = useRef<HTMLDivElement>(null);
   const subRef = useRef<HTMLParagraphElement>(null);
+  const imageWrapRef = useRef<HTMLDivElement>(null);
+  const imageInnerRef = useRef<HTMLDivElement>(null);
+  const badgeRef = useRef<HTMLDivElement>(null);
   const formColRef = useRef<HTMLDivElement>(null);
   const infoColRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
   const magnetRef = useRef<HTMLButtonElement>(null);
-  const markerRef = useRef<HTMLDivElement>(null);
 
+  const [status, setStatus] = useState<"idle" | "sending" | "error">("idle");
   const [submitted, setSubmitted] = useState(false);
-  const [focusedField, setFocusedField] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>({
+  const [imgFailed, setImgFailed] = useState(false);
+  const [form, setForm] = useState<ContactFormData>({
     name: "",
     email: "",
     company: "",
@@ -59,944 +127,662 @@ export function Contact() {
   });
 
   const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (status === "sending") return;
+    setStatus("sending");
 
-    // Animate out form before showing success
-    gsap.to(formColRef.current, {
-      opacity: 0,
-      y: -20,
-      duration: 0.4,
-      ease: "power2.in",
-      onComplete: () => setSubmitted(true),
-    });
+    try {
+      // Replace with a real request (e.g. POST /api/contact) via the onSubmit prop.
+      if (onSubmit) await onSubmit(form);
+      else await new Promise((r) => setTimeout(r, 600));
+
+      gsap.to(formColRef.current, {
+        opacity: 0,
+        y: -16,
+        duration: 0.35,
+        ease: "power2.in",
+        onComplete: () => {
+          setSubmitted(true);
+          setStatus("idle");
+        },
+      });
+    } catch {
+      setStatus("error");
+    }
   };
 
+  /* ---------- Animations ---------- */
   useGSAP(
     () => {
       const mm = gsap.matchMedia();
 
-      // ── Custom cursor (desktop only) ──────────────────────────────────
-      mm.add("(hover: hover)", () => {
-        const cursor = cursorRef.current;
-        if (!cursor) return;
+      /* Cursor glow + magnetic button: precise pointers, motion allowed */
+      mm.add(
+        "(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)",
+        () => {
+          const section = sectionRef.current;
+          const cursor = cursorRef.current;
+          const btn = magnetRef.current;
+          const cleanups: (() => void)[] = [];
 
-        const move = (e: MouseEvent) => {
-          gsap.to(cursor, {
-            x: e.clientX,
-            y: e.clientY,
-            duration: 0.6,
-            ease: "power3.out",
-          });
-        };
+          if (section && cursor) {
+            gsap.set(cursor, { xPercent: -50, yPercent: -50 });
+            const qx = gsap.quickTo(cursor, "x", {
+              duration: 0.6,
+              ease: "power3.out",
+            });
+            const qy = gsap.quickTo(cursor, "y", {
+              duration: 0.6,
+              ease: "power3.out",
+            });
+            const move = (e: PointerEvent) => {
+              qx(e.clientX);
+              qy(e.clientY);
+            };
+            const enter = () =>
+              gsap.to(cursor, { scale: 1, opacity: 1, duration: 0.3 });
+            const leave = () =>
+              gsap.to(cursor, { scale: 0, opacity: 0, duration: 0.3 });
 
-        const enter = () =>
-          gsap.to(cursor, { scale: 1, opacity: 1, duration: 0.3 });
-        const leave = () =>
-          gsap.to(cursor, { scale: 0, opacity: 0, duration: 0.3 });
+            section.addEventListener("pointermove", move);
+            section.addEventListener("pointerenter", enter);
+            section.addEventListener("pointerleave", leave);
+            cleanups.push(() => {
+              section.removeEventListener("pointermove", move);
+              section.removeEventListener("pointerenter", enter);
+              section.removeEventListener("pointerleave", leave);
+            });
+          }
 
-        window.addEventListener("mousemove", move);
-        sectionRef.current?.addEventListener("mouseenter", enter);
-        sectionRef.current?.addEventListener("mouseleave", leave);
+          if (btn) {
+            const onMove = (e: PointerEvent) => {
+              const r = btn.getBoundingClientRect();
+              gsap.to(btn, {
+                x: (e.clientX - (r.left + r.width / 2)) * 0.3,
+                y: (e.clientY - (r.top + r.height / 2)) * 0.3,
+                duration: 0.5,
+                ease: "power3.out",
+              });
+            };
+            const onLeave = () =>
+              gsap.to(btn, {
+                x: 0,
+                y: 0,
+                duration: 0.7,
+                ease: "elastic.out(1.2, 0.4)",
+              });
+            btn.addEventListener("pointermove", onMove);
+            btn.addEventListener("pointerleave", onLeave);
+            cleanups.push(() => {
+              btn.removeEventListener("pointermove", onMove);
+              btn.removeEventListener("pointerleave", onLeave);
+            });
+          }
 
-        return () => {
-          window.removeEventListener("mousemove", move);
-        };
-      });
-
-      // ── Magnetic button (desktop only) ────────────────────────────────
-      mm.add("(hover: hover)", () => {
-        const btn = magnetRef.current;
-        if (!btn) return;
-
-        const onMove = (e: MouseEvent) => {
-          const rect = btn.getBoundingClientRect();
-          const cx = rect.left + rect.width / 2;
-          const cy = rect.top + rect.height / 2;
-          const dx = (e.clientX - cx) * 0.35;
-          const dy = (e.clientY - cy) * 0.35;
-          gsap.to(btn, { x: dx, y: dy, duration: 0.5, ease: "power3.out" });
-        };
-
-        const onLeave = () => {
-          gsap.to(btn, {
-            x: 0,
-            y: 0,
-            duration: 0.7,
-            ease: "elastic.out(1.2, 0.4)",
-          });
-        };
-
-        btn.addEventListener("mousemove", onMove);
-        btn.addEventListener("mouseleave", onLeave);
-
-        return () => {
-          btn.removeEventListener("mousemove", onMove);
-          btn.removeEventListener("mouseleave", onLeave);
-        };
-      });
-
-      // ── Eyebrow line draw ─────────────────────────────────────────────
-      gsap.fromTo(
-        markerRef.current,
-        { scaleX: 0 },
-        {
-          scaleX: 1,
-          duration: 0.8,
-          ease: "power3.out",
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: "top 80%",
-          },
-        }
+          return () => cleanups.forEach((fn) => fn());
+        },
       );
 
-      // ── Heading SplitText ─────────────────────────────────────────────
-      if (headingRef.current) {
-        const split = new SplitText(headingRef.current, {
-          type: "lines,words",
+      /* Entrance + scroll motion: skipped entirely for reduced motion,
+         so everything stays visible by default. */
+      mm.add("(prefers-reduced-motion: no-preference)", () => {
+        let split: SplitText | undefined;
+
+        /* Header: one orchestrated reveal */
+        const header = gsap.timeline({
+          scrollTrigger: { trigger: sectionRef.current, start: "top 78%" },
         });
 
-        gsap.fromTo(
-          split.words,
-          { y: "110%", opacity: 0 },
-          {
-            y: "0%",
-            opacity: 1,
-            duration: 0.9,
-            stagger: 0.06,
-            ease: "power4.out",
-            scrollTrigger: {
-              trigger: headingRef.current,
-              start: "top 82%",
-            },
-          }
+        header.fromTo(
+          markerRef.current,
+          { scaleX: 0 },
+          { scaleX: 1, duration: 0.8, ease: "power3.out" },
         );
 
-        return () => split.revert();
-      }
+        if (lineRef.current) {
+          split = new SplitText(lineRef.current, { type: "words" });
+          header.fromTo(
+            split.words,
+            { yPercent: 110, opacity: 0 },
+            {
+              yPercent: 0,
+              opacity: 1,
+              duration: 0.9,
+              ease: "power4.out",
+              stagger: 0.07,
+            },
+            0.1,
+          );
+        }
+
+        header.fromTo(
+          gradientWordRef.current,
+          { yPercent: 110, opacity: 0 },
+          { yPercent: 0, opacity: 1, duration: 0.9, ease: "power4.out" },
+          0.35,
+        );
+        header.fromTo(
+          subRef.current,
+          { y: 16, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.8, ease: "power3.out" },
+          0.55,
+        );
+
+        /* Image: curtain reveal + gentle parallax */
+        header.fromTo(
+          imageWrapRef.current,
+          { clipPath: "inset(100% 0% 0% 0% round 24px)" },
+          {
+            clipPath: "inset(0% 0% 0% 0% round 24px)",
+            duration: 1.2,
+            ease: "power4.inOut",
+          },
+          0.2,
+        );
+        header.fromTo(
+          badgeRef.current,
+          { y: 16, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.7, ease: "power3.out" },
+          1.1,
+        );
+
+        gsap.fromTo(
+          imageInnerRef.current,
+          { yPercent: -5 },
+          {
+            yPercent: 5,
+            ease: "none",
+            scrollTrigger: {
+              trigger: imageWrapRef.current,
+              start: "top bottom",
+              end: "bottom top",
+              scrub: true,
+            },
+          },
+        );
+
+        /* Columns */
+        gsap.fromTo(
+          formColRef.current,
+          { opacity: 0, y: 40 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.9,
+            ease: "power3.out",
+            scrollTrigger: { trigger: formColRef.current, start: "top 85%" },
+          },
+        );
+        gsap.fromTo(
+          infoColRef.current,
+          { opacity: 0, y: 40 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.9,
+            delay: 0.12,
+            ease: "power3.out",
+            scrollTrigger: { trigger: infoColRef.current, start: "top 85%" },
+          },
+        );
+
+        /* Timeline rows */
+        gsap.fromTo(
+          ".timeline-item",
+          { opacity: 0, x: 16 },
+          {
+            opacity: 1,
+            x: 0,
+            duration: 0.5,
+            stagger: 0.1,
+            ease: "power2.out",
+            scrollTrigger: { trigger: ".timeline-card", start: "top 85%" },
+          },
+        );
+
+        return () => split?.revert();
+      });
     },
-    { scope: sectionRef }
+    { scope: sectionRef },
   );
 
+  /* Success card: bring the column back in */
   useGSAP(
     () => {
-      // ── Sub-paragraph ─────────────────────────────────────────────────
-      gsap.fromTo(
-        subRef.current,
-        { opacity: 0, y: 24 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.8,
-          ease: "power3.out",
-          scrollTrigger: {
-            trigger: subRef.current,
-            start: "top 85%",
-          },
-        }
-      );
-
-      // ── Form column stagger ───────────────────────────────────────────
+      if (!submitted) return;
       gsap.fromTo(
         formColRef.current,
-        { opacity: 0, x: -40 },
-        {
-          opacity: 1,
-          x: 0,
-          duration: 1,
-          ease: "power3.out",
-          scrollTrigger: {
-            trigger: formColRef.current,
-            start: "top 80%",
-          },
-        }
-      );
-
-      // ── Info column ───────────────────────────────────────────────────
-      gsap.fromTo(
-        infoColRef.current,
-        { opacity: 0, x: 40 },
-        {
-          opacity: 1,
-          x: 0,
-          duration: 1,
-          delay: 0.15,
-          ease: "power3.out",
-          scrollTrigger: {
-            trigger: infoColRef.current,
-            start: "top 80%",
-          },
-        }
-      );
-
-      // ── Timeline items ─────────────────────────────────────────────────
-      gsap.fromTo(
-        ".timeline-item",
-        { opacity: 0, x: 20 },
-        {
-          opacity: 1,
-          x: 0,
-          duration: 0.5,
-          stagger: 0.1,
-          ease: "power2.out",
-          scrollTrigger: {
-            trigger: ".timeline-item",
-            start: "top 85%",
-          },
-        }
+        { opacity: 0, y: 20, scale: 0.97 },
+        { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "back.out(1.4)" },
       );
     },
-    { scope: sectionRef }
-  );
-
-  // Success state animate in
-  useGSAP(
-    () => {
-      if (submitted) {
-        gsap.fromTo(
-          ".success-card",
-          { opacity: 0, scale: 0.92, y: 20 },
-          { opacity: 1, scale: 1, y: 0, duration: 0.6, ease: "back.out(1.4)" }
-        );
-      }
-    },
-    { dependencies: [submitted], scope: sectionRef }
+    { dependencies: [submitted], scope: sectionRef },
   );
 
   return (
     <>
-      {/* Custom cursor blob */}
+      {/* Cursor glow (fine pointers only) */}
       <div
         ref={cursorRef}
-        aria-hidden="true"
+        aria-hidden
+        className="pointer-events-none fixed left-0 top-0 z-[9999] hidden h-[120px] w-[120px] scale-0 rounded-full opacity-0 mix-blend-screen [@media(hover:hover)_and_(pointer:fine)]:block"
         style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          width: 120,
-          height: 120,
-          borderRadius: "50%",
           background:
-            "radial-gradient(circle, rgba(109,40,217,0.35) 0%, rgba(109,40,217,0) 70%)",
-          pointerEvents: "none",
-          zIndex: 9999,
-          transform: "translate(-50%, -50%) scale(0)",
-          opacity: 0,
-          mixBlendMode: "screen",
+            "radial-gradient(circle, rgba(140,110,255,0.32) 0%, rgba(140,110,255,0) 70%)",
         }}
       />
 
       <section
         ref={sectionRef}
         id="contact"
-        style={{
-          position: "relative",
-          padding: "120px 0",
-          overflow: "hidden",
-          background: "#09090b",
-        }}
+        aria-labelledby="contact-heading"
+        className="relative overflow-hidden bg-[var(--background)] py-20 sm:py-28 lg:py-32"
       >
-        {/* ── Background atmosphere ─────────────────────────────────── */}
-        <div
-          aria-hidden="true"
-          style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
-        >
-          {/* purple orb left */}
+        {/* Atmosphere */}
+        <div aria-hidden className="pointer-events-none absolute inset-0">
           <div
+            className="absolute -left-[10%] top-[8%] h-[70vw] max-h-[600px] w-[70vw] max-w-[600px] rounded-full blur-[60px]"
             style={{
-              position: "absolute",
-              top: "10%",
-              left: "-10%",
-              width: 600,
-              height: 600,
-              borderRadius: "50%",
               background:
-                "radial-gradient(circle, rgba(109,40,217,0.12) 0%, transparent 70%)",
-              filter: "blur(60px)",
+                "radial-gradient(circle, rgba(110,90,210,0.14) 0%, transparent 70%)",
             }}
           />
-          {/* violet orb bottom-right */}
           <div
+            className="absolute -right-[5%] bottom-0 h-[60vw] max-h-[500px] w-[60vw] max-w-[500px] rounded-full blur-[80px]"
             style={{
-              position: "absolute",
-              bottom: "0%",
-              right: "-5%",
-              width: 500,
-              height: 500,
-              borderRadius: "50%",
               background:
-                "radial-gradient(circle, rgba(139,92,246,0.10) 0%, transparent 70%)",
-              filter: "blur(80px)",
+                "radial-gradient(circle, rgba(110,210,230,0.09) 0%, transparent 70%)",
             }}
           />
-          {/* top rule */}
           <div
+            className="absolute inset-x-0 top-0 h-px"
             style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 1,
               background:
-                "linear-gradient(90deg, transparent 0%, rgba(139,92,246,0.3) 50%, transparent 100%)",
+                "linear-gradient(90deg, transparent, rgba(176,142,255,0.35) 50%, transparent)",
             }}
           />
-          {/* noise grain */}
           <div
+            className="absolute inset-0 opacity-40"
             style={{
-              position: "absolute",
-              inset: 0,
               backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E")`,
               backgroundSize: "200px 200px",
-              opacity: 0.4,
             }}
           />
         </div>
 
-        <div
-          style={{
-            maxWidth: 1320,
-            margin: "0 auto",
-            padding: "0 clamp(20px, 5vw, 80px)",
-            position: "relative",
-            zIndex: 1,
-          }}
-        >
-          {/* ── Section header ──────────────────────────────────────── */}
-          <div style={{ marginBottom: 72 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                marginBottom: 28,
-              }}
-            >
-              <div
-                ref={markerRef}
-                style={{
-                  width: 32,
-                  height: 2,
-                  background: "linear-gradient(90deg, #7c3aed, #a78bfa)",
-                  transformOrigin: "left center",
-                }}
-              />
-              <span
-                ref={eyebrowRef}
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: "0.2em",
-                  textTransform: "uppercase",
-                  color: "#a78bfa",
-                  fontFamily: "system-ui, sans-serif",
-                }}
+        <div className="relative z-[1] mx-auto w-full max-w-[1320px] px-5 sm:px-8 lg:px-12">
+          {/* ── Header: text left, image right ── */}
+          <div className="mb-14 grid items-center gap-10 sm:mb-16 lg:mb-20 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16">
+            <div className="min-w-0">
+              <div className="mb-6 flex items-center gap-3 sm:mb-7">
+                <div
+                  ref={markerRef}
+                  className="h-0.5 w-8 origin-left bg-gradient-to-r from-[#b08eff] to-[#6ee7f7]"
+                />
+                <span
+                  className={`${bodyFont} text-xs font-medium tracking-[0.14em] text-[#b08eff]`}
+                >
+                  Get in touch
+                </span>
+              </div>
+
+              <div className="overflow-hidden pb-2">
+                <h2
+                  id="contact-heading"
+                  className="font-clash-grotesk m-0 max-w-[700px] text-[clamp(38px,6vw,76px)] font-medium leading-[1.08] tracking-[-0.03em] text-[var(--foreground)]"
+                >
+                  <span ref={lineRef} className="block">
+                    Let&apos;s build something
+                  </span>
+                  <span
+                    ref={gradientWordRef}
+                    className={`inline-block pb-1 ${gradientText}`}
+                  >
+                    extraordinary.
+                  </span>
+                </h2>
+              </div>
+
+              <p
+                ref={subRef}
+                className={`${bodyFont} mt-6 max-w-[480px] text-base leading-[1.7] text-[var(--muted-foreground)] sm:text-lg`}
               >
-                Get in touch
-              </span>
+                Tell us about your project. We&apos;ll respond within 48 hours
+                with a tailored proposal, no commitment required.
+              </p>
             </div>
 
-            <div style={{ overflow: "hidden" }}>
-              <h2
-                ref={headingRef}
-                style={{
-                  fontSize: "clamp(40px, 6vw, 80px)",
-                  fontWeight: 800,
-                  lineHeight: 1.05,
-                  letterSpacing: "-0.03em",
-                  color: "#fafafa",
-                  marginBottom: 24,
-                  maxWidth: 700,
-                }}
-                className="font-clash-grotesk"
+            {/* Image */}
+            <div className="relative mx-auto w-full max-w-[560px] lg:mx-0 lg:ml-auto">
+              <div
+                ref={imageWrapRef}
+                className="relative aspect-[4/3] w-full overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--card)] sm:aspect-[16/10] lg:aspect-[4/4]"
               >
-                Let&apos;s build something{" "}
-                <span
+                {/* Fallback backdrop, visible if the image is missing */}
+                <div
+                  aria-hidden
+                  className="absolute inset-0"
                   style={{
                     background:
-                      "linear-gradient(135deg, #7c3aed 0%, #a78bfa 50%, #c4b5fd 100%)",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    backgroundClip: "text",
+                      "linear-gradient(135deg, rgba(176,142,255,0.35), rgba(110,231,247,0.18) 60%, transparent)",
                   }}
-                >
-                  extraordinary.
-                </span>
-              </h2>
-            </div>
+                />
+                {!imgFailed && (
+                  <div
+                    ref={imageInnerRef}
+                    className="absolute inset-x-0 -top-[8%] h-[116%]"
+                  >
+                    <Image
+                      src={imageSrc}
+                      alt={imageAlt}
+                      fill
+                      priority
+                      sizes="(min-width: 1024px) 40vw, 100vw"
+                      className="object-cover"
+                      onError={() => setImgFailed(true)}
+                    />
+                  </div>
+                )}
+                {/* Legibility gradient for the badge */}
+                <div
+                  aria-hidden
+                  className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/50 to-transparent"
+                />
+              </div>
 
-            <p
-              ref={subRef}
-              style={{
-                fontSize: 18,
-                lineHeight: 1.7,
-                color: "#71717a",
-                maxWidth: 480,
-                fontFamily: "system-ui, sans-serif",
-              }}
-            >
-              Tell us about your project. We&apos;ll respond within 48 hours with a
-              tailored proposal — no commitment required.
-            </p>
+              <div
+                ref={badgeRef}
+                className={`${bodyFont} absolute bottom-4 left-4 right-4 flex items-center gap-3 rounded-2xl border border-white/15 bg-black/40 px-4 py-3 text-white backdrop-blur-md sm:bottom-5 sm:left-5 sm:right-auto`}
+              >
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                </span>
+                <span className="text-[13px] leading-tight">
+                  Taking on new projects
+                  <span className="block text-white/60">
+                    Replies within 48 hours
+                  </span>
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* ── Main grid ───────────────────────────────────────────── */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns:
-                "repeat(auto-fit, minmax(min(100%, 420px), 1fr))",
-              gap: "clamp(32px, 5vw, 72px)",
-              alignItems: "start",
-            }}
-          >
-            {/* ── Form column ─────────────────────────────────────── */}
-            <div ref={formColRef} style={{ opacity: 0 }}>
+          {/* ── Main grid ── */}
+          <div className="grid items-start gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16">
+            {/* Form column */}
+            <div ref={formColRef} className="min-w-0">
               {submitted ? (
                 <div
-                  className="success-card"
+                  role="status"
+                  className="rounded-3xl border border-[#b08eff]/25 p-8 text-center backdrop-blur-md sm:p-14"
                   style={{
-                    borderRadius: 24,
-                    border: "1px solid rgba(124,58,237,0.25)",
                     background:
-                      "linear-gradient(135deg, rgba(124,58,237,0.08) 0%, rgba(9,9,11,0.8) 100%)",
-                    backdropFilter: "blur(20px)",
-                    padding: "clamp(40px, 6vw, 72px)",
-                    textAlign: "center",
-                    display: "opacity",
+                      "linear-gradient(135deg, rgba(176,142,255,0.10) 0%, rgba(9,9,11,0.6) 100%)",
                   }}
                 >
-                  <div
-                    style={{
-                      width: 72,
-                      height: 72,
-                      borderRadius: "50%",
-                      background: "rgba(16,185,129,0.15)",
-                      border: "1px solid rgba(16,185,129,0.3)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      margin: "0 auto 28px",
-                    }}
-                  >
+                  <div className="mx-auto mb-7 flex h-[72px] w-[72px] items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/15">
                     <Send size={28} color="#34d399" />
                   </div>
                   <h3
-                    style={{
-                      fontSize: 28,
-                      fontWeight: 700,
-                      color: "#fafafa",
-                      marginBottom: 12,
-                      fontFamily: "system-ui, sans-serif",
-                    }}
+                    className={`${bodyFont} mb-3 text-2xl font-bold text-[var(--foreground)] sm:text-[28px]`}
                   >
                     Message sent.
                   </h3>
                   <p
-                    style={{
-                      color: "#71717a",
-                      lineHeight: 1.6,
-                      fontFamily: "system-ui, sans-serif",
-                    }}
+                    className={`${bodyFont} mx-auto max-w-sm leading-relaxed text-[var(--muted-foreground)]`}
                   >
-                    We&apos;ll review your project details and be in touch within 48
-                    hours.
+                    We&apos;ll review your project details and be in touch
+                    within 48 hours.
                   </p>
                 </div>
               ) : (
-                <form
-                  onSubmit={handleSubmit}
-                  style={{ display: "flex", flexDirection: "column", gap: 20 }}
-                >
-                  {/* Name + Email row */}
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns:
-                        "repeat(auto-fit, minmax(160px, 1fr))",
-                      gap: 16,
-                    }}
-                  >
-                    <FormField
-                      label="Name"
-                      name="name"
+                <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <div>
+                      <Label htmlFor="name" className={labelCls}>
+                        Name
+                      </Label>
+                      <Input
+                        id="name"
+                        name="name"
+                        type="text"
+                        autoComplete="name"
+                        placeholder="Your name"
+                        required
+                        value={form.name}
+                        onChange={handleChange}
+                        className={fieldCls}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="email" className={labelCls}>
+                        Email
+                      </Label>
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="you@company.com"
+                        required
+                        value={form.email}
+                        onChange={handleChange}
+                        className={fieldCls}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="company" className={labelCls}>
+                      Company{" "}
+                      <span className="font-normal opacity-70">(optional)</span>
+                    </Label>
+                    <Input
+                      id="company"
+                      name="company"
                       type="text"
-                      placeholder="Your name"
-                      required
-                      value={form.name}
+                      autoComplete="organization"
+                      placeholder="Company name"
+                      value={form.company}
                       onChange={handleChange}
-                      focused={focusedField === "name"}
-                      onFocus={() => setFocusedField("name")}
-                      onBlur={() => setFocusedField(null)}
-                    />
-                    <FormField
-                      label="Email"
-                      name="email"
-                      type="email"
-                      placeholder="you@company.com"
-                      required
-                      value={form.email}
-                      onChange={handleChange}
-                      focused={focusedField === "email"}
-                      onFocus={() => setFocusedField("email")}
-                      onBlur={() => setFocusedField(null)}
+                      className={fieldCls}
                     />
                   </div>
 
-                  {/* Company */}
-                  <FormField
-                    label="Company"
-                    name="company"
-                    type="text"
-                    placeholder="Company name (optional)"
-                    value={form.company}
-                    onChange={handleChange}
-                    focused={focusedField === "company"}
-                    onFocus={() => setFocusedField("company")}
-                    onBlur={() => setFocusedField(null)}
-                  />
-
-                  {/* Service select */}
                   <div>
-                    <label style={labelStyle}>What do you need?</label>
-                    <select
+                    <Label htmlFor="service" className={labelCls}>
+                      What do you need?
+                    </Label>
+                    <Select
                       name="service"
                       value={form.service}
-                      onChange={handleChange}
-                      style={{
-                        ...inputStyle,
-                        color: form.service ? "#e4e4e7" : "#52525b",
-                        cursor: "pointer",
-                        appearance: "none",
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2371717a' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E")`,
-                        backgroundRepeat: "no-repeat",
-                        backgroundPosition: "right 16px center",
-                      }}
+                      onValueChange={(value) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          service: value as ServiceOption,
+                        }))
+                      }
                     >
-                      <option value="" style={{ background: "#0f0f11" }}>
-                        Select a service…
-                      </option>
-                      <option value="custom" style={{ background: "#0f0f11" }}>
-                        Custom Website
-                      </option>
-                      <option
-                        value="ecommerce"
-                        style={{ background: "#0f0f11" }}
+                      <SelectTrigger
+                        id="service"
+                        className={`${fieldCls} !h-12 cursor-pointer data-[placeholder]:text-[var(--muted-foreground)]`}
                       >
-                        E-Commerce Store
-                      </option>
-                      <option value="webapp" style={{ background: "#0f0f11" }}>
-                        Web Application
-                      </option>
-                      <option
-                        value="redesign"
-                        style={{ background: "#0f0f11" }}
-                      >
-                        Website Redesign
-                      </option>
-                      <option value="other" style={{ background: "#0f0f11" }}>
-                        Other
-                      </option>
-                    </select>
+                        <SelectValue placeholder="Select a service…" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]">
+                        {SERVICES.map((s) => (
+                          <SelectItem
+                            key={s.value}
+                            value={s.value}
+                            className={selectItemCls}
+                          >
+                            {s.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  {/* Project details */}
                   <div>
-                    <label style={labelStyle}>Project details</label>
-                    <textarea
+                    <Label htmlFor="details" className={labelCls}>
+                      Project details
+                    </Label>
+                    <Textarea
+                      id="details"
                       name="details"
                       required
                       rows={5}
                       placeholder="Describe your project, goals, and timeline…"
                       value={form.details}
                       onChange={handleChange}
-                      onFocus={() => setFocusedField("details")}
-                      onBlur={() => setFocusedField(null)}
-                      style={{
-                        ...inputStyle,
-                        resize: "none",
-                        outline:
-                          focusedField === "details"
-                            ? "1px solid #7c3aed"
-                            : undefined,
-                        borderColor:
-                          focusedField === "details" ? "#7c3aed" : undefined,
-                        boxShadow:
-                          focusedField === "details"
-                            ? "0 0 0 3px rgba(124,58,237,0.15)"
-                            : undefined,
-                      }}
+                      className={`${fieldCls} !h-auto min-h-[140px] resize-none py-3.5`}
                     />
                   </div>
 
-                  {/* Submit */}
-                  <div style={{ paddingTop: 4 }}>
+                  <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center sm:gap-5">
                     <button
                       ref={magnetRef}
                       type="submit"
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "16px 36px",
-                        borderRadius: 100,
-                        background:
-                          "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)",
-                        color: "#fff",
-                        fontWeight: 600,
-                        fontSize: 15,
-                        border: "none",
-                        cursor: "pointer",
-                        fontFamily: "system-ui, sans-serif",
-                        letterSpacing: "-0.01em",
-                        boxShadow: "0 8px 32px rgba(124,58,237,0.35)",
-                        transition:
-                          "box-shadow 0.3s ease, background 0.3s ease",
-                        position: "relative",
-                        overflow: "hidden",
-                        willChange: "transform",
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.boxShadow =
-                          "0 12px 48px rgba(124,58,237,0.55)";
-                        (
-                          e.currentTarget as HTMLButtonElement
-                        ).style.background =
-                          "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)";
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.boxShadow =
-                          "0 8px 32px rgba(124,58,237,0.35)";
-                        (
-                          e.currentTarget as HTMLButtonElement
-                        ).style.background =
-                          "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)";
-                      }}
+                      disabled={status === "sending"}
+                      className={`${bodyFont} inline-flex w-full items-center justify-center gap-2.5 rounded-full bg-gradient-to-br from-[#7c5cff] to-[#4a8cf0] px-9 py-4 text-[15px] font-semibold tracking-tight text-white shadow-[0_8px_32px_rgba(124,92,255,0.35)] transition-shadow duration-300 will-change-transform hover:shadow-[0_12px_48px_rgba(124,92,255,0.55)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#b08eff]/40 disabled:opacity-70 sm:w-auto`}
                     >
-                      Send message
+                      {status === "sending" ? "Sending…" : "Send message"}
                       <Send size={15} />
                     </button>
+
+                    {status === "error" && (
+                      <p
+                        role="alert"
+                        className={`${bodyFont} text-sm text-red-400`}
+                      >
+                        Something went wrong. Please try again, or email us
+                        directly.
+                      </p>
+                    )}
                   </div>
                 </form>
               )}
             </div>
 
-            {/* ── Info column ─────────────────────────────────────── */}
-            <div
-              ref={infoColRef}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 20,
-                opacity: 0,
-              }}
-            >
-              {/* Contact info card */}
-              <div style={cardStyle}>
-                <p style={cardLabelStyle}>Contact</p>
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 20 }}
-                >
-                  {CONTACT_ITEMS.map(({ Icon, label, value }) => (
-                    <div
-                      key={label}
-                      style={{ display: "flex", alignItems: "center", gap: 14 }}
-                    >
-                      <div
-                        style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: 12,
-                          background: "rgba(124,58,237,0.12)",
-                          border: "1px solid rgba(124,58,237,0.2)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <Icon size={16} color="#a78bfa" />
-                      </div>
-                      <div>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: "#52525b",
-                            marginBottom: 2,
-                            fontFamily: "system-ui, sans-serif",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.08em",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {label}
+            {/* Info column */}
+            <div ref={infoColRef} className="flex min-w-0 flex-col gap-5">
+              <div className={cardCls}>
+                <p className={`${cardTitleCls} mb-5`}>Contact</p>
+                <ul className="m-0 flex list-none flex-col gap-5 p-0">
+                  {CONTACT_ITEMS.map(({ Icon, label, value, href }) => {
+                    const inner = (
+                      <>
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#b08eff]/20 bg-[#b08eff]/10">
+                          <Icon size={16} color="#b08eff" />
                         </div>
-                        <div
-                          style={{
-                            fontSize: 14,
-                            color: "#d4d4d8",
-                            fontFamily: "system-ui, sans-serif",
-                          }}
-                        >
-                          {value}
+                        <div className="min-w-0">
+                          <div
+                            className={`${bodyFont} mb-0.5 text-xs text-[var(--muted-foreground)]`}
+                          >
+                            {label}
+                          </div>
+                          <div
+                            className={`${bodyFont} break-words text-sm text-[var(--foreground)]`}
+                          >
+                            {value}
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      </>
+                    );
+                    return (
+                      <li key={label}>
+                        {href ? (
+                          <a
+                            href={href}
+                            className="flex items-center gap-3.5 rounded-lg outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-[#b08eff]/50"
+                          >
+                            {inner}
+                          </a>
+                        ) : (
+                          <div className="flex items-center gap-3.5">
+                            {inner}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
 
-              {/* Timeline card */}
-              <div style={cardStyle}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginBottom: 20,
-                  }}
-                >
-                  <p style={{ ...cardLabelStyle, margin: 0 }}>
-                    Typical timeline
-                  </p>
-                  <Clock size={14} color="#52525b" />
+              <div className={`timeline-card ${cardCls}`}>
+                <div className="mb-3 flex items-center justify-between">
+                  <p className={cardTitleCls}>Typical timeline</p>
+                  <Clock size={14} color="var(--muted-foreground)" />
                 </div>
-                <div style={{ display: "flex", flexDirection: "column" }}>
+                <ol className="m-0 flex list-none flex-col p-0">
                   {TIMELINE_STEPS.map((step, i) => (
-                    <div
+                    <li
                       key={step.label}
-                      className="timeline-item"
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 16,
-                        padding: "14px 0",
-                        borderBottom:
-                          i < TIMELINE_STEPS.length - 1
-                            ? "1px solid rgba(255,255,255,0.05)"
-                            : "none",
-                        opacity: 0,
-                      }}
+                      className={`timeline-item flex items-center gap-3 py-3.5 sm:gap-4 ${
+                        i < TIMELINE_STEPS.length - 1
+                          ? "border-b border-[var(--border)]"
+                          : ""
+                      }`}
                     >
                       <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          letterSpacing: "0.1em",
-                          color: "#52525b",
-                          minWidth: 20,
-                          fontFamily: "system-ui, sans-serif",
-                        }}
+                        className={`${bodyFont} min-w-5 text-[11px] font-semibold tabular-nums text-[var(--muted-foreground)]`}
                       >
                         {step.index}
                       </span>
                       <span
-                        style={{
-                          flex: 1,
-                          fontSize: 14,
-                          color: "#a1a1aa",
-                          fontFamily: "system-ui, sans-serif",
-                        }}
+                        className={`${bodyFont} flex-1 text-sm text-[var(--muted-foreground)]`}
                       >
                         {step.label}
                       </span>
                       <span
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: "#c4b5fd",
-                          background: "rgba(124,58,237,0.12)",
-                          padding: "3px 10px",
-                          borderRadius: 100,
-                          fontFamily: "system-ui, sans-serif",
-                          whiteSpace: "nowrap",
-                        }}
+                        className={`${bodyFont} whitespace-nowrap rounded-full bg-[#b08eff]/10 px-2.5 py-1 text-xs font-semibold text-[#b08eff] sm:text-[13px]`}
                       >
                         {step.time}
                       </span>
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ol>
               </div>
 
-              {/* CTA card */}
-              <div
+              {/* Consultation CTA: real link, keyboard accessible */}
+              <a
+                href="mailto:madutek@gmail.com?subject=Free%2030-minute%20consultation"
+                className="group flex items-start justify-between gap-4 rounded-2xl border border-[#b08eff]/20 p-6 outline-none transition-colors duration-200 hover:border-[#b08eff]/45 focus-visible:ring-2 focus-visible:ring-[#b08eff]/50"
                 style={{
-                  borderRadius: 20,
                   background:
-                    "linear-gradient(135deg, rgba(109,40,217,0.18) 0%, rgba(124,58,237,0.06) 100%)",
-                  border: "1px solid rgba(167,139,250,0.2)",
-                  padding: 24,
-                  display: "flex",
-                  alignItems: "flex-start",
-                  justifyContent: "space-between",
-                  gap: 16,
-                  cursor: "pointer",
-                  transition: "border-color 0.2s, background 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLDivElement).style.borderColor =
-                    "rgba(167,139,250,0.4)";
-                  (e.currentTarget as HTMLDivElement).style.background =
-                    "linear-gradient(135deg, rgba(109,40,217,0.25) 0%, rgba(124,58,237,0.10) 100%)";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLDivElement).style.borderColor =
-                    "rgba(167,139,250,0.2)";
-                  (e.currentTarget as HTMLDivElement).style.background =
-                    "linear-gradient(135deg, rgba(109,40,217,0.18) 0%, rgba(124,58,237,0.06) 100%)";
+                    "linear-gradient(135deg, rgba(176,142,255,0.14) 0%, rgba(110,231,247,0.04) 100%)",
                 }}
               >
                 <div>
                   <p
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 700,
-                      color: "#c4b5fd",
-                      marginBottom: 6,
-                      fontFamily: "system-ui, sans-serif",
-                    }}
+                    className={`${bodyFont} mb-1.5 text-[15px] font-bold text-[var(--foreground)]`}
                   >
-                    Free 30-min consultation
+                    Free 30-minute consultation
                   </p>
                   <p
-                    style={{
-                      fontSize: 13,
-                      color: "#71717a",
-                      lineHeight: 1.6,
-                      fontFamily: "system-ui, sans-serif",
-                    }}
+                    className={`${bodyFont} text-[13px] leading-relaxed text-[var(--muted-foreground)]`}
                   >
                     Every project starts with an honest conversation about your
                     goals. No commitment, no pressure.
                   </p>
                 </div>
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    background: "rgba(124,58,237,0.2)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  <ArrowUpRight size={16} color="#a78bfa" />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#b08eff]/20 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5">
+                  <ArrowUpRight size={16} color="#b08eff" />
                 </div>
-              </div>
+              </a>
             </div>
           </div>
         </div>
       </section>
     </>
-  );
-}
-
-// ── Shared styles ──────────────────────────────────────────────────────────
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: 12,
-  fontWeight: 500,
-  color: "#71717a",
-  marginBottom: 8,
-  fontFamily: "system-ui, sans-serif",
-  letterSpacing: "0.03em",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "13px 16px",
-  borderRadius: 12,
-  background: "rgba(255,255,255,0.04)",
-  border: "1px solid rgba(255,255,255,0.08)",
-  color: "#e4e4e7",
-  fontSize: 14,
-  fontFamily: "system-ui, sans-serif",
-  transition:
-    "border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease",
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const cardStyle: React.CSSProperties = {
-  borderRadius: 20,
-  background: "rgba(255,255,255,0.03)",
-  border: "1px solid rgba(255,255,255,0.07)",
-  backdropFilter: "blur(12px)",
-  padding: 24,
-};
-
-const cardLabelStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: "0.15em",
-  textTransform: "uppercase",
-  color: "#52525b",
-  marginBottom: 20,
-  fontFamily: "system-ui, sans-serif",
-};
-
-// ── FormField sub-component ────────────────────────────────────────────────
-
-interface FormFieldProps {
-  label: string;
-  name: string;
-  type: string;
-  placeholder: string;
-  required?: boolean;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  focused: boolean;
-  onFocus: () => void;
-  onBlur: () => void;
-}
-
-function FormField({
-  label,
-  name,
-  type,
-  placeholder,
-  required,
-  value,
-  onChange,
-  focused,
-  onFocus,
-  onBlur,
-}: FormFieldProps) {
-  return (
-    <div>
-      <label style={labelStyle}>{label}</label>
-      <input
-        type={type}
-        name={name}
-        placeholder={placeholder}
-        required={required}
-        value={value}
-        onChange={onChange}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        style={{
-          ...inputStyle,
-          outline: focused ? "1px solid #7c3aed" : "none",
-          borderColor: focused ? "#7c3aed" : "rgba(255,255,255,0.08)",
-          background: focused
-            ? "rgba(124,58,237,0.06)"
-            : "rgba(255,255,255,0.04)",
-          boxShadow: focused ? "0 0 0 3px rgba(124,58,237,0.15)" : "none",
-        }}
-      />
-    </div>
   );
 }

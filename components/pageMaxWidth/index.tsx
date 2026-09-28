@@ -12,8 +12,7 @@ const PageMaxWidth = ({ children, className = "" }: PageContainerProps) => {
         relative 
         mx-auto 
         w-full 
-        max-w-500    
-        px-6               
+        max-w-500                   
         md:px-12           
         lg:px-20          
         ${className}

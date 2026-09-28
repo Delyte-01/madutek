@@ -1,9 +1,10 @@
 "use client";
+
 import { useEffect, useRef } from "react";
+import type { PointerEvent } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SplitText } from "gsap/SplitText";
-import React from "react";
 
 gsap.registerPlugin(ScrollTrigger, SplitText);
 
@@ -12,50 +13,60 @@ interface Testimonial {
   name: string;
   role: string;
   content: string;
-  metric: string;
+  value: number; // number the metric counts up to
+  suffix: string; // "%", "×", "K+"
   metricLabel: string;
-  index: string;
 }
 
-interface TestimonialCardProps {
-  t: Testimonial;
-  cardRef: (el: HTMLDivElement | null) => void;
-}
+/* ---------- Data ---------- */
+const testimonials: Testimonial[] = [
+  {
+    name: "Sarah Mitchell",
+    role: "CEO, Meridian Finance",
+    content:
+      "MaduTek completely transformed our online presence. The website they built not only looks incredible but has increased our lead generation by 340%. The team was responsive, creative, and truly understood our vision.",
+    value: 340,
+    suffix: "%",
+    metricLabel: "Lead growth",
+  },
+  {
+    name: "James Whitfield",
+    role: "Founder, Verdant Studio",
+    content:
+      "Working with MaduTek was a game-changer. They delivered a site that perfectly captures our architectural aesthetic. The attention to detail in the animations and image galleries is unreal. Best investment we made.",
+    value: 12,
+    suffix: "×",
+    metricLabel: "ROI achieved",
+  },
+  {
+    name: "Priya Desai",
+    role: "Marketing Director, Nourish Kitchen",
+    content:
+      "From the first call to launch, the process was seamless. Our new site handles thousands of orders daily without a hiccup. The team even helped us integrate our delivery logistics. Absolutely top-notch.",
+    value: 10,
+    suffix: "K+",
+    metricLabel: "Daily orders",
+  },
+];
 
-/* ---------- Hook ---------- */
-export function useGsap(
-  animation: () => void,
-  deps: React.DependencyList = []
-) {
-  const scope = useRef<HTMLElement | null>(null);
+const marqueeWords = [
+  "Trusted",
+  "Design",
+  "Strategy",
+  "Results",
+  "Creative",
+  "Growth",
+  "Built with MaduTek",
+];
 
-  useEffect(() => {
-    // Create a gsap context scoped to this ref
-    const ctx = gsap.context(() => {
-      animation();
-    }, scope);
+const bodyFont = "font-['Helvetica_Neue',Helvetica,Arial,sans-serif]";
 
-    return () => {
-      ctx.revert();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-
-  return scope;
-}
-/* ---------- Components ---------- */
+/* ---------- Pieces ---------- */
 function StarRating() {
   return (
-    <div className="flex gap-1 mb-6">
+    <div className="mb-6 flex gap-1" aria-label="5 out of 5 stars" role="img">
       {[...Array(5)].map((_, i) => (
-        <svg
-          key={i}
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          className="star-icon"
-        >
+        <svg key={i} width="14" height="14" viewBox="0 0 12 12" aria-hidden>
           <path
             d="M6 1L7.34 4.26L10.9 4.64L8.35 6.97L9.12 10.46L6 8.6L2.88 10.46L3.65 6.97L1.1 4.64L4.66 4.26L6 1Z"
             fill="#E8C840"
@@ -66,173 +77,111 @@ function StarRating() {
   );
 }
 
-function TestimonialCard({ t, cardRef }: TestimonialCardProps) {
-  return (
-    <div
-      ref={cardRef}
-      className="testimonial-card"
-      style={{
-        position: "relative",
-        borderRadius: "2px",
-        padding: "48px 40px 40px",
-        background: "transparent",
-        border: "1px solid rgba(255,255,255,0.06)",
-        overflow: "hidden",
-        cursor: "default",
-      }}
-    >
-      {/* Index */}
-      <span
-        className="card-index"
-        style={{
-          position: "absolute",
-          top: "40px",
-          right: "40px",
-          fontFamily: '"Helvetica Neue", sans-serif',
-          fontSize: "11px",
-          letterSpacing: "0.15em",
-          color: "rgba(255,255,255,0.18)",
-          fontWeight: 400,
-        }}
-      >
-        {t.index}
-      </span>
+function TestimonialCard({ t, wide }: { t: Testimonial; wide?: boolean }) {
+  // Cursor-following spotlight (pure CSS variables, no re-renders)
+  const onMove = (e: PointerEvent<HTMLElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`);
+    e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`);
+  };
 
-      {/* Animated border line — top */}
+  const initials = t.name
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("");
+
+  return (
+    <article
+      onPointerMove={onMove}
+      className={`testimonial-card group relative flex flex-col overflow-hidden bg-[var(--card)] p-7 sm:p-10 ${
+        wide ? "md:col-span-2 lg:col-span-1" : ""
+      }`}
+    >
+      {/* Spotlight */}
       <div
-        className="card-line"
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
         style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "0%",
-          height: "1px",
-          background: "linear-gradient(90deg, #b08eff, #6ee7f7)",
+          background:
+            "radial-gradient(360px circle at var(--mx, 50%) var(--my, 50%), rgba(140,110,255,0.10), transparent 65%)",
         }}
       />
 
+      {/* Animated top accent line */}
+      <div
+        aria-hidden
+        className="card-line absolute left-0 top-0 h-px w-full origin-left bg-gradient-to-r from-[#b08eff] to-[#6ee7f7]"
+      />
+
+      {/* Oversized quote mark */}
+      <svg
+        aria-hidden
+        width="44"
+        height="34"
+        viewBox="0 0 44 34"
+        className="absolute right-7 top-9 opacity-[0.07] transition-opacity duration-500 group-hover:opacity-[0.16] sm:right-10 sm:top-11"
+      >
+        <path
+          d="M0 34V19.5C0 8.2 5.6 1.6 16.8 0l1.6 4.6C12.6 6.2 10 9.6 9.8 14.4H18V34H0Zm26 0V19.5C26 8.2 31.6 1.6 42.8 0l1.2 4.6c-5.6 1.6-8.2 5-8.4 9.8H44V34H26Z"
+          fill="url(#qg)"
+        />
+        <defs>
+          <linearGradient id="qg" x1="0" y1="0" x2="44" y2="34">
+            <stop stopColor="#b08eff" />
+            <stop offset="1" stopColor="#6ee7f7" />
+          </linearGradient>
+        </defs>
+      </svg>
+
       <StarRating />
 
-      {/* Quote */}
       <blockquote
-        className="card-quote"
-        style={{
-          margin: "0 0 40px",
-          padding: 0,
-          fontFamily: '"Helvetica Neue", sans-serif',
-          fontSize: "15px",
-          lineHeight: "1.75",
-          color: "rgba(255,255,255,0.55)",
-          fontWeight: 300,
-          letterSpacing: "0.01em",
-          fontStyle: "normal",
-        }}
+        className={`${bodyFont} relative m-0 mb-10 flex-1 p-0 text-[15px] font-light leading-[1.8] tracking-[0.005em] text-[var(--muted-foreground)] sm:text-base`}
       >
         {t.content}
       </blockquote>
 
-      {/* Divider */}
-      <div
-        style={{
-          width: "100%",
-          height: "1px",
-          background: "rgba(255,255,255,0.06)",
-          marginBottom: "32px",
-        }}
-      />
+      <div className="mb-7 h-px w-full bg-[var(--border)]" />
 
-      {/* Footer */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-end",
-          justifyContent: "space-between",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-          {/* Avatar */}
+      <footer className="flex flex-wrap items-end justify-between gap-x-6 gap-y-5">
+        <div className="flex min-w-0 items-center gap-3.5">
           <div
-            className="avatar"
-            style={{
-              width: "40px",
-              height: "40px",
-              borderRadius: "50%",
-              background: "rgba(176,142,255,0.12)",
-              border: "1px solid rgba(176,142,255,0.2)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontFamily: '"Helvetica Neue", sans-serif',
-              fontSize: "11px",
-              fontWeight: 500,
-              color: "#b08eff",
-              letterSpacing: "0.05em",
-              flexShrink: 0,
-            }}
+            className={`${bodyFont} flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#b08eff]/25 bg-gradient-to-br from-[#b08eff]/15 to-[#6ee7f7]/10 text-xs font-medium tracking-wide text-[#b08eff] transition-transform duration-300 group-hover:scale-110`}
           >
-            {t.name
-              .split(" ")
-              .map((n) => n[0])
-              .join("")}
+            {initials}
           </div>
-
-          <div>
+          <div className="min-w-0">
             <div
-              style={{
-                fontFamily: '"Helvetica Neue", sans-serif',
-                fontSize: "13px",
-                fontWeight: 500,
-                color: "rgba(255,255,255,0.85)",
-                marginBottom: "2px",
-                letterSpacing: "0.01em",
-              }}
+              className={`${bodyFont} mb-0.5 text-sm font-medium text-[var(--foreground)]`}
             >
               {t.name}
             </div>
             <div
-              style={{
-                fontFamily: '"Helvetica Neue", sans-serif',
-                fontSize: "11px",
-                color: "rgba(255,255,255,0.28)",
-                letterSpacing: "0.05em",
-                textTransform: "uppercase",
-              }}
+              className={`${bodyFont} text-xs leading-snug text-[var(--muted-foreground)]`}
             >
               {t.role}
             </div>
           </div>
         </div>
 
-        {/* Metric */}
-        <div style={{ textAlign: "right" }}>
+        <div className="text-left sm:text-right">
           <div
-            className="card-metric"
-            style={{
-              fontFamily: '"Helvetica Neue", sans-serif',
-              fontSize: "28px",
-              fontWeight: 700,
-              letterSpacing: "-0.03em",
-              color: "#fff",
-              lineHeight: 1,
-              marginBottom: "2px",
-            }}
+            className={`${bodyFont} card-metric bg-gradient-to-r from-[#b08eff] to-[#6ee7f7] bg-clip-text text-[32px] font-bold leading-none tracking-tight text-transparent tabular-nums sm:text-[36px]`}
+            data-value={t.value}
+            data-suffix={t.suffix}
           >
-            {t.metric}
+            {t.value}
+            {t.suffix}
           </div>
           <div
-            style={{
-              fontFamily: '"Helvetica Neue", sans-serif',
-              fontSize: "10px",
-              color: "rgba(255,255,255,0.25)",
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-            }}
+            className={`${bodyFont} mt-1.5 text-xs text-[var(--muted-foreground)]`}
           >
             {t.metricLabel}
           </div>
         </div>
-      </div>
-    </div>
+      </footer>
+    </article>
   );
 }
 
@@ -240,305 +189,189 @@ function TestimonialCard({ t, cardRef }: TestimonialCardProps) {
 export function Testimonials() {
   const sectionRef = useRef<HTMLElement | null>(null);
   const eyebrowRef = useRef<HTMLDivElement | null>(null);
-  const headingRef = useRef<HTMLHeadingElement | null>(null);
+  const lineRef = useRef<HTMLSpanElement | null>(null);
+  const gradientWordRef = useRef<HTMLSpanElement | null>(null);
   const subRef = useRef<HTMLParagraphElement | null>(null);
-  const cardsRef = useRef<(HTMLDivElement | null)[]>([]);
+  const gridRef = useRef<HTMLDivElement | null>(null);
   const marqueeRef = useRef<HTMLDivElement | null>(null);
 
-  useGsap(() => {
-    // Place your gsap animations here, same as before
-    gsap.fromTo(
-      eyebrowRef.current,
-      { clipPath: "inset(0 100% 0 0)", opacity: 1 },
-      {
-        clipPath: "inset(0 0% 0 0)",
-        duration: 1,
-        ease: "power3.out",
-        scrollTrigger: {
+  useEffect(() => {
+    let split: SplitText | undefined;
+
+    const ctx = gsap.context(() => {
+      const mm = gsap.matchMedia();
+
+      // Only animate when the visitor hasn't asked for reduced motion.
+      mm.add("(prefers-reduced-motion: no-preference)", () => {
+        const trigger = {
           trigger: sectionRef.current,
           start: "top 78%",
           toggleActions: "play none none none",
-        },
-      }
-    );
+        };
 
-    const split = new SplitText(headingRef.current, { type: "words" });
+        /* Header: one orchestrated reveal */
+        const header = gsap.timeline({ scrollTrigger: trigger });
 
-    gsap.fromTo(
-      split.words,
-      { yPercent: 110, opacity: 0 },
-      {
-        yPercent: 0,
-        opacity: 1,
-        duration: 0.9,
-        ease: "power4.out",
-        stagger: 0.06,
-        delay: 0.2,
-        scrollTrigger: {
-          trigger: sectionRef.current,
-          start: "top 78%",
-          toggleActions: "play none none none",
-        },
-      }
-    );
+        header.fromTo(
+          eyebrowRef.current,
+          { clipPath: "inset(0 100% 0 0)" },
+          { clipPath: "inset(0 0% 0 0)", duration: 0.9, ease: "power3.out" },
+        );
 
-    /* ── 3. Subtext fade-slide ── */
-    gsap.fromTo(
-      subRef.current,
-      { y: 20, opacity: 0 },
-      {
-        y: 0,
-        opacity: 1,
-        duration: 0.8,
-        ease: "power3.out",
-        delay: 0.55,
-        scrollTrigger: {
-          trigger: sectionRef.current,
-          start: "top 78%",
-          toggleActions: "play none none none",
-        },
-      }
-    );
+        if (lineRef.current) {
+          split = new SplitText(lineRef.current, { type: "words" });
+          header.fromTo(
+            split.words,
+            { yPercent: 110, opacity: 0 },
+            {
+              yPercent: 0,
+              opacity: 1,
+              duration: 0.9,
+              ease: "power4.out",
+              stagger: 0.07,
+            },
+            0.15,
+          );
+        }
 
-    /* ── 4. Cards: stagger reveal with border-line wipe ── */
-    cardsRef.current.forEach((card, i) => {
-      if (!card) return;
-      const line = card.querySelector(".card-line");
-      const metric = card.querySelector(".card-metric");
-      const avatar = card.querySelector(".avatar");
+        header.fromTo(
+          gradientWordRef.current,
+          { yPercent: 110, opacity: 0 },
+          { yPercent: 0, opacity: 1, duration: 0.9, ease: "power4.out" },
+          0.4,
+        );
 
-      const tl = gsap.timeline({
-        scrollTrigger: {
-          trigger: card,
-          start: "top 85%",
-          toggleActions: "play none none none",
-        },
-        delay: i * 0.12,
-      });
+        header.fromTo(
+          subRef.current,
+          { y: 16, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.8, ease: "power3.out" },
+          0.6,
+        );
 
-      /* Card slides up */
-      tl.fromTo(
-        card,
-        { y: 60, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.85, ease: "power3.out" }
-      );
+        /* Cards */
+        const cards = gsap.utils.toArray<HTMLElement>(
+          ".testimonial-card",
+          gridRef.current,
+        );
 
-      /* Top-border accent wipe */
-      tl.fromTo(
-        line,
-        { width: "0%" },
-        { width: "100%", duration: 0.7, ease: "power2.inOut" },
-        "-=0.5"
-      );
+        cards.forEach((card, i) => {
+          const line = card.querySelector(".card-line");
+          const metric = card.querySelector<HTMLElement>(".card-metric");
 
-      /* Metric counter */
-      tl.fromTo(
-        metric,
-        { opacity: 0, scale: 0.7 },
-        { opacity: 1, scale: 1, duration: 0.5, ease: "back.out(1.5)" },
-        "-=0.3"
-      );
+          const tl = gsap.timeline({
+            scrollTrigger: {
+              trigger: card,
+              start: "top 88%",
+              toggleActions: "play none none none",
+            },
+            delay: (i % 3) * 0.1,
+          });
 
-      /* Hover: card border glow */
-      card.addEventListener("mouseenter", () => {
-        gsap.to(card, {
-          borderColor: "rgba(176,142,255,0.22)",
-          duration: 0.35,
-          ease: "power2.out",
+          tl.fromTo(
+            card,
+            { y: 48, opacity: 0 },
+            { y: 0, opacity: 1, duration: 0.85, ease: "power3.out" },
+          ).fromTo(
+            line,
+            { scaleX: 0 },
+            { scaleX: 1, duration: 0.8, ease: "power2.inOut" },
+            "-=0.5",
+          );
+
+          if (metric) {
+            const end = Number(metric.dataset.value);
+            const suffix = metric.dataset.suffix ?? "";
+            const counter = { v: 0 };
+            metric.textContent = `0${suffix}`;
+            tl.to(
+              counter,
+              {
+                v: end,
+                duration: 1.4,
+                ease: "power2.out",
+                onUpdate: () => {
+                  metric.textContent = `${Math.round(counter.v)}${suffix}`;
+                },
+              },
+              "-=0.5",
+            );
+          }
         });
-        gsap.to(avatar, {
-          scale: 1.1,
-          duration: 0.3,
-          ease: "power2.out",
-        });
-      });
-      card.addEventListener("mouseleave", () => {
-        gsap.to(card, {
-          borderColor: "rgba(255,255,255,0.06)",
-          duration: 0.35,
-          ease: "power2.out",
-        });
-        gsap.to(avatar, {
-          scale: 1,
-          duration: 0.3,
-          ease: "power2.out",
-        });
-      });
-    });
 
-    /* ── 5. Marquee: infinite horizontal scroll ── */
-    const marqueeInner = marqueeRef.current;
-    if (marqueeInner) {
-      const totalWidth = marqueeInner.scrollWidth / 2;
-      gsap.to(marqueeInner, {
-        x: -totalWidth,
-        duration: 22,
-        ease: "none",
-        repeat: -1,
+        /* Marquee: two identical halves, so -50% loops seamlessly */
+        if (marqueeRef.current) {
+          gsap.to(marqueeRef.current, {
+            xPercent: -50,
+            duration: 30,
+            ease: "none",
+            repeat: -1,
+          });
+        }
       });
-    }
+    }, sectionRef);
 
-    // ...rest of your gsap animations
+    return () => {
+      split?.revert();
+      ctx.revert();
+    };
   }, []);
 
-  const testimonials: Testimonial[] = [
-    {
-      name: "Sarah Mitchell",
-      role: "CEO, Meridian Finance",
-      content:
-        "Forge Studio completely transformed our online presence. The website they built not only looks incredible but has increased our lead generation by 340%. The team was responsive, creative, and truly understood our vision.",
-      metric: "340%",
-      metricLabel: "lead growth",
-      index: "01",
-    },
-    {
-      name: "James Whitfield",
-      role: "Founder, Verdant Studio",
-      content:
-        "Working with Forge was a game-changer. They delivered a site that perfectly captures our architectural aesthetic. The attention to detail in the animations and image galleries is unreal. Best investment we made.",
-      metric: "12×",
-      metricLabel: "ROI achieved",
-      index: "02",
-    },
-    {
-      name: "Priya Desai",
-      role: "Marketing Director, Nourish Kitchen",
-      content:
-        "From the first call to launch, the process was seamless. Our new site handles thousands of orders daily without a hiccup. The team even helped us integrate our delivery logistics. Absolutely top-notch.",
-      metric: "10K+",
-      metricLabel: "daily orders",
-      index: "03",
-    },
-  ];
-
-  const marqueeWords = [
-    "Trusted",
-    "—",
-    "Design",
-    "—",
-    "Strategy",
-    "—",
-    "Results",
-    "—",
-    "Creative",
-    "—",
-    "Growth",
-    "—",
-    "Built with Forge",
-    "—",
-  ];
+  const track = [...marqueeWords, ...marqueeWords];
 
   return (
     <section
       ref={sectionRef}
-      style={{
-        position: "relative",
-        padding: "140px 0 160px",
-        background: "transparent",
-        overflow: "hidden",
-      }}
+      className="relative overflow-hidden bg-transparent py-20 sm:py-28 lg:py-40"
+      aria-labelledby="testimonials-heading"
     >
       {/* Top hairline */}
+      <div className="absolute left-[6%] right-[6%] top-0 h-px bg-[var(--border)]" />
+
+      {/* Ambient glows */}
       <div
+        aria-hidden
+        className="pointer-events-none absolute -right-[15%] top-[8%] h-[70vw] max-h-[600px] w-[70vw] max-w-[600px] rounded-full"
         style={{
-          position: "absolute",
-          top: 0,
-          left: "8%",
-          right: "8%",
-          height: "1px",
-          background: "rgba(255,255,255,0.07)",
+          background:
+            "radial-gradient(circle, rgba(110,90,210,0.09) 0%, transparent 70%)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-[10%] bottom-[12%] h-[60vw] max-h-[500px] w-[60vw] max-w-[500px] rounded-full"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(110,210,200,0.06) 0%, transparent 70%)",
         }}
       />
 
-      {/* Ambient gradient blob */}
-      <div
-        style={{
-          position: "absolute",
-          top: "10%",
-          right: "-15%",
-          width: "600px",
-          height: "600px",
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle, rgba(110,90,210,0.07) 0%, transparent 70%)",
-          pointerEvents: "none",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          bottom: "15%",
-          left: "-10%",
-          width: "500px",
-          height: "500px",
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle, rgba(110,210,200,0.05) 0%, transparent 70%)",
-          pointerEvents: "none",
-        }}
-      />
-
-      <div
-        style={{
-          maxWidth: "1320px",
-          margin: "0 auto",
-          padding: "0 48px",
-        }}
-      >
+      <div className="relative mx-auto w-full max-w-[1320px] px-5 sm:px-8 lg:px-12">
         {/* Header */}
-        <div style={{ marginBottom: "80px" }}>
+        <div className="mb-12 sm:mb-16 lg:mb-20">
           <div
             ref={eyebrowRef}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "10px",
-              marginBottom: "28px",
-              clipPath: "inset(0 100% 0 0)",
-            }}
+            className="mb-6 inline-flex items-center gap-3 sm:mb-7"
           >
+            <span className="inline-block h-px w-6 bg-gradient-to-r from-[#b08eff] to-[#6ee7f7]" />
             <span
-              style={{
-                display: "inline-block",
-                width: "24px",
-                height: "1px",
-                background: "rgba(176,142,255,0.7)",
-              }}
-            />
-            <span
-              style={{
-                fontFamily: '"Helvetica Neue", sans-serif',
-                fontSize: "10px",
-                letterSpacing: "0.2em",
-                textTransform: "uppercase",
-                color: "rgba(176,142,255,0.85)",
-                fontWeight: 400,
-              }}
+              className={`${bodyFont} text-xs tracking-[0.14em] text-[#b08eff]`}
             >
-              Client Voices
+              Client voices
             </span>
           </div>
-          <div className="overflow-hidden pb-2">
+
+          <div className="overflow-hidden ">
             <h2
-              ref={headingRef}
-              className="
-      font-clash-grotesk
-      text-[clamp(42px,6vw,76px)]
-      font-bold
-      tracking-tight
-      leading-[1.25]
-      text-white
-      m-0
-    "
+              id="testimonials-heading"
+              className="font-clash-grotesk  text-[clamp(38px,7vw,76px)] font-medium uppercase leading-[1.15] tracking-tight text-[var(--foreground)]"
             >
-              Proof in every
+              <span ref={lineRef} className="inline-block">
+                Proof in every
+              </span>
               <br />
               <span
-                className="
-        bg-gradient-to-r from-[#b08eff] to-[#6ee7f7]
-        bg-clip-text text-transparent
-        inline-block
-      "
+                ref={gradientWordRef}
+                className="inline-block bg-gradient-to-r from-[#b08eff] to-[#6ee7f7] bg-clip-text  text-transparent"
               >
                 partnership.
               </span>
@@ -547,77 +380,51 @@ export function Testimonials() {
 
           <p
             ref={subRef}
-            style={{
-              fontFamily: '"Helvetica Neue", sans-serif',
-              fontSize: "15px",
-              color: "rgba(255,255,255,0.35)",
-              margin: "28px 0 0",
-              maxWidth: "380px",
-              lineHeight: 1.7,
-              fontWeight: 300,
-            }}
+            className={`${bodyFont} mt-3 max-w-[400px] text-[15px] font-light leading-[1.7] text-[var(--muted-foreground)] 1sm:text-base`}
           >
-            Real outcomes from real founders. No filler — just results that
-            speak for themselves.
+            Real outcomes from real founders. No filler, just results that speak
+            for themselves.
           </p>
         </div>
 
-        {/* Cards grid */}
+        {/* Cards: 1 col mobile, 2 col tablet (last card spans), 3 col desktop */}
         <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: "1px",
-            background: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.05)",
-          }}
+          ref={gridRef}
+          className="grid grid-cols-1 gap-px overflow-hidden rounded-sm border border-[var(--border)] bg-[var(--border)] md:grid-cols-2 lg:grid-cols-3"
         >
           {testimonials.map((t, i) => (
             <TestimonialCard
               key={t.name}
               t={t}
-              cardRef={(el) => (cardsRef.current[i] = el)}
+              wide={i === testimonials.length - 1}
             />
           ))}
         </div>
       </div>
 
-      {/* Marquee ticker */}
+      {/* Marquee with faded edges */}
       <div
+        aria-hidden
+        className="mt-16 overflow-hidden border-y border-[var(--border)] py-5 sm:mt-24 lg:mt-28"
         style={{
-          marginTop: "100px",
-          overflow: "hidden",
-          borderTop: "1px solid rgba(255,255,255,0.05)",
-          borderBottom: "1px solid rgba(255,255,255,0.05)",
-          padding: "20px 0",
+          maskImage:
+            "linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent)",
+          WebkitMaskImage:
+            "linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent)",
         }}
       >
         <div
           ref={marqueeRef}
-          style={{
-            display: "flex",
-            gap: "40px",
-            willChange: "transform",
-            whiteSpace: "nowrap",
-          }}
+          className="flex w-max items-center will-change-transform"
         >
-          {[...marqueeWords, ...marqueeWords].map((word, i) => (
-            <span
-              key={i}
-              style={{
-                fontFamily: '"Helvetica Neue", sans-serif',
-                fontSize: "11px",
-                letterSpacing: "0.2em",
-                textTransform: "uppercase",
-                color:
-                  word === "—"
-                    ? "rgba(176,142,255,0.35)"
-                    : "rgba(255,255,255,0.2)",
-                fontWeight: word === "—" ? 300 : 400,
-                flexShrink: 0,
-              }}
-            >
-              {word}
+          {track.map((word, i) => (
+            <span key={i} className="flex shrink-0 items-center">
+              <span
+                className={`${bodyFont} whitespace-nowrap px-5 text-xs tracking-[0.14em] text-[var(--muted-foreground)] sm:px-7 sm:text-[13px]`}
+              >
+                {word}
+              </span>
+              <span className="h-1 w-1 rounded-full bg-gradient-to-r from-[#b08eff] to-[#6ee7f7]" />
             </span>
           ))}
         </div>
